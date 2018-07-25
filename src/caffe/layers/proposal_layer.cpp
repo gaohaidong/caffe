@@ -249,31 +249,37 @@ template <typename Dtype>
 void ProposalLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
                                        const vector<Blob<Dtype>*>& top)
 {
-  CHECK_EQ(bottom[0]->shape(0), 1) << "Only single item batches are supported";
-
-  const Dtype* p_bottom_item = bottom[0]->cpu_data();
-  const Dtype* p_d_anchor_item = bottom[1]->cpu_data();
-  const Dtype* p_img_info_cpu = bottom[2]->cpu_data();
+  // CHECK_EQ(bottom[0]->shape(0), 1) << "Only single item batches are supported";
+  const Dtype* p_bottom_begin = bottom[0]->cpu_data();
+  const Dtype* p_d_anchor_begin = bottom[1]->cpu_data();
+  const Dtype* p_img_info_begin = bottom[2]->cpu_data();
+  vector<int> top_shape(2);
+  top_shape[0] = bottom[0]->shape(0) * post_nms_topn_;
+  top_shape[1] = 5;
+  top[0] -> Reshape(top_shape);
   Dtype* p_roi_item = top[0]->mutable_cpu_data();
   Dtype* p_score_item = (top.size() > 1) ? top[1]->mutable_cpu_data() : NULL;
 
   vector<int> proposals_shape(2);
-  vector<int> top_shape(2);
   proposals_shape[0] = 0;
   proposals_shape[1] = 5;
   top_shape[0] = 0;
   top_shape[1] = 5;
 
   for (int n = 0; n < bottom[0]->shape(0); ++n) {
+    const Dtype* p_bottom_item = p_bottom_begin + bottom[0]->offset(n);
+    const Dtype* p_d_anchor_item = p_d_anchor_begin + bottom[1]->offset(n);
+    const Dtype* p_img_info_item = p_img_info_begin + bottom[2]->offset(n);
+
     // bottom shape: (2 x num_anchors) x H x W
     const int bottom_H = bottom[0]->height();
     const int bottom_W = bottom[0]->width();
     // input image height & width
-    const Dtype img_H = p_img_info_cpu[0];
-    const Dtype img_W = p_img_info_cpu[1];
+    const Dtype img_H = p_img_info_item[0];
+    const Dtype img_W = p_img_info_item[1];
     // scale factor for height & width
-    const Dtype scale_H = p_img_info_cpu[2];
-    const Dtype scale_W = p_img_info_cpu[3];
+    const Dtype scale_H = p_img_info_item[2];
+    const Dtype scale_W = p_img_info_item[3];
     // minimum box width & height
     const Dtype min_box_H = min_size_ * scale_H;
     const Dtype min_box_W = min_size_ * scale_W;
@@ -306,14 +312,9 @@ void ProposalLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
         num_rois,  n,  proposals_.cpu_data(),  roi_indices_.cpu_data(),
         p_roi_item,  p_score_item);
 
-    top_shape[0] += num_rois;
+    p_roi_item += num_rois * 5;
   }
 
-  top[0]->Reshape(top_shape);
-  if (top.size() > 1) {
-    top_shape.pop_back();
-    top[1]->Reshape(top_shape);
-  }
 }
 
 
